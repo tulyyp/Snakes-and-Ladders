@@ -13,6 +13,10 @@ class Board():
   def n(self):
     return self._n
 
+  @property
+  def row_size(self):
+    return self._row_size
+
   @classmethod
   def build_space(cls, players, size):
     """Build the space."""
@@ -30,14 +34,14 @@ class Board():
     """
     rows = []
     space_size = 20
-    for i in xrange(0, self._n, self._row_size):
-      row_num = i // self._row_size
+    for i in xrange(0, self.n, self.row_size):
+      row_num = i // self.row_size
       row = []
       if player_positions:
         # build row columns
         # alternating rows. First row start from left to right, second from right to left...
         if row_num % 2: # odd has reverse order
-          for j in xrange(i + self._row_size - 1, i - 1, -1):
+          for j in xrange(i + self.row_size - 1, i - 1, -1):
             space = ' ' * space_size
             if j < self.n: # ignore bigger numbers
               # player locations
@@ -48,7 +52,7 @@ class Board():
 
               row.append(str('%0.3d%s' % (j + 1, space)))
         else: # even has normal order
-          for j in xrange(i, i + self._row_size):
+          for j in xrange(i, i + self.row_size):
             space = ' ' * space_size
             if j < self.n:
               # player locations
@@ -61,9 +65,9 @@ class Board():
       else:
         # no need to place player positions
         if row_num % 2: # odd has reverse order
-          row = [str('%0.3d%s' % (j + 1, space)) for j in xrange(i + self._row_size - 1, i - 1, -1) if j < self._n]
+          row = [str('%0.3d%s' % (j + 1, space)) for j in xrange(i + self.row_size - 1, i - 1, -1) if j < self._n]
         else: # even has normal order
-          row = [str('%0.3d%s' % (j + 1, space)) for j in xrange(i, i + self._row_size) if j < self._n]
+          row = [str('%0.3d%s' % (j + 1, space)) for j in xrange(i, i + self.row_size) if j < self._n]
       if row:
         rows.append(row)
 
@@ -74,14 +78,19 @@ class Board():
 
 class Game():
 
-  def __init__(self, n, row_size, num_players=2, debug=False):
+  def __init__(self, n, row_size, num_players=2, rules=None, debug=False):
     self._board = Board(n, row_size)
     self._num_players = num_players
     self._winner = None
-    # self._current_player = 0
     self._completed = False
-    self.init_positions()
     self._debug = debug
+
+    self.init_positions()
+    self.set_snakes_and_ladders(rules=rules)
+
+  @property
+  def debug(self):
+    return self._debug
 
   @property
   def n(self):
@@ -89,8 +98,27 @@ class Game():
     return self._board.n
 
   @property
+  def board_row_size(self):
+    """Number of boxes on one row."""
+    return self._board.row_size
+
+  @property
   def players(self):
     return self._players
+
+  @property
+  def rules(self):
+    return self._rules
+
+  @property
+  def display_rules(self):
+    """Conver to 1 based and print."""
+    print '\nRules : '
+    print '-' * 55
+    for key, value in self.rules.iteritems():
+      print '%s: %s' % (key + 1, value + 1)
+    print '-' * 55
+    print
 
   @property
   def is_completed(self):
@@ -107,12 +135,72 @@ class Game():
     """
     self._completed = value
 
+  def generate_random_values(self):
+    """Generate random data for the snakes or ladders."""
+    import math
+    rules = {}
+    reserve = {} # used for double check not to assign 2 rules to same point
+    percentage = 50 # max percentage of one row
+    max_num_per_row = int(math.ceil(self.board_row_size * percentage / 100))
+    # minimum 2
+    max_num_per_row = max(2, max_num_per_row)
+
+    # generate rows list
+    rows = []
+    for i in xrange(0, self.n, self.board_row_size):
+      current_row = i // self.board_row_size
+      rows.append(current_row)
+
+    for i in xrange(0, self.n, self.board_row_size):
+      # current row num (zero based)
+      current_row = i // self.board_row_size
+      # start point (zero based)
+      row_start = i
+      # end point
+      row_end = i + self.board_row_size - 1
+
+      # last point can not be start or end point or ladder or snake
+      if row_end == self.n - 1:
+        # decrement by one
+        row_end -= 1
+
+      # clone rows
+      temp_rows = list(rows)
+      # remove current row from list
+      temp_rows.remove(current_row)
+      for _ in range(random.randint(2, max_num_per_row)): # loop x times to connect 2 points.
+        # start point
+        start_point = random.randint(row_start, row_end)
+        # get random row
+        target_row = random.choice(temp_rows)
+        target_row_start = target_row * self.board_row_size + 1
+        target_row_end = (target_row + 1) * self.board_row_size
+        target_point = random.randint(target_row_start, target_row_end)
+        if (start_point not in rules and start_point not in reserve and
+          target_point not in rules and target_point not in reserve):
+          rules[start_point] = target_point
+          # save reverse
+          reserve[target_point] = start_point
+    if self.debug:
+      print ('Rules: ', rules)
+    return rules
+
+  def set_snakes_and_ladders(self, rules=None):
+    """Set snakes and ladders. If snakes, ladders are not provided, will generate random values.
+
+    rules: dict
+    """
+    if not rules:
+      rules = self.generate_random_values() # generate random ladders and snakes.
+
+    self._rules = rules
+
   def init_positions(self):
     """Initilize the player positions"""
     self._players = [] # list of dict
     for i in xrange(self._num_players):
       self._players.append({
-        'position': 0
+        'position': -1 # all players start from -1
       })
 
   def roll_dice(self):
@@ -132,13 +220,27 @@ class Game():
     """Play round for a player"""
     position = self._players[player]['position'] + dice
     n = self.n - 1
-    if self._debug:
-      print 'Player : %s moved from %s to position: %s , dice: %s' % (player + 1, self._players[player]['position'] + 1, position + 1, dice)
     if position == n: # winner
       self.set_completed()
       self._winner = player
     elif position > n:
-      position = self.n - (position - n)
+      # if pass final point by 3, send back by 3.
+      position = n - (position - n)
+
+    if self._debug:
+      print 'Player : %s moved from %s to position: %s , dice: %s ' % (player + 1, self._players[player]['position'] + 1, position + 1, dice)
+
+    # check if hit ladder or snake
+    if position in self.rules:
+      # move to ladder/snake point
+      prev_position = position
+      position = self.rules[position]
+      if prev_position > position: # snake
+        if self._debug:
+          print 'Snake. Moved from: %s to %s.' % (prev_position + 1, position + 1)
+      else:
+        if self._debug:
+          print 'Ladder. Moved from: %s to %s.' % (prev_position + 1, position + 1)
 
     self._players[player]['position'] = position
     # move to next player
@@ -186,8 +288,11 @@ def play_game(num_players=5):
   board = Game(n=100, row_size=5, num_players=50, debug=True)
   # play the game
   board.auto_play()
+  # print Rules
+  board.display_rules
   # show the current player locations on the board
   board.show_board()
+  print
 
 
 play_game()
