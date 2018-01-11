@@ -183,14 +183,11 @@ def game_stats(num_games=600):
 
 def play_game(num_players=5):
   """Play one game and print the final player locations at the end."""
-  board = Game(n=100, row_size=10, num_players=10, debug=True)
+  board = Game(n=100, row_size=5, num_players=50, debug=True)
   # play the game
   board.auto_play()
   # show the current player locations on the board
   board.show_board()
 
-
-# # run game 600 times to see win statistics.
-# game_stats(600)
 
 play_game()
