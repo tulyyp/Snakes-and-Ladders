@@ -78,9 +78,10 @@ class Board():
 
 class Game():
 
-  def __init__(self, n, row_size, num_players=2, rules=None, debug=False):
+  def __init__(self, n, row_size, human_players=0, ai_players=2, rules=None, debug=False):
     self._board = Board(n, row_size)
-    self._num_players = num_players
+    self._human_players = human_players
+    self._ai_players = ai_players
     self._winner = None
     self._completed = False
     self._debug = debug
@@ -116,7 +117,7 @@ class Game():
     print '\nRules : '
     print '-' * 55
     for key, value in self.rules.iteritems():
-      print '%s: %s' % (key + 1, value + 1)
+      print '%0.3d -> %0.3d' % (key + 1, value + 1)
     print '-' * 55
     print
 
@@ -181,8 +182,6 @@ class Game():
           rules[start_point] = target_point
           # save reverse
           reserve[target_point] = start_point
-    if self.debug:
-      print ('Rules: ', rules)
     return rules
 
   def set_snakes_and_ladders(self, rules=None):
@@ -195,10 +194,15 @@ class Game():
 
     self._rules = rules
 
+  @property
+  def num_players(self):
+    """Total number of players. Human players and ai players."""
+    return self._human_players + self._ai_players
+
   def init_positions(self):
     """Initilize the player positions"""
     self._players = [] # list of dict
-    for i in xrange(self._num_players):
+    for i in xrange(self.num_players):
       self._players.append({
         'position': -1 # all players start from -1
       })
@@ -207,12 +211,33 @@ class Game():
     """Generate random number."""
     return random.randint(1, 6)
 
+  def is_human_player(self, current_player):
+    """Check if given player number is human player.
+
+    current_player: int (zero based )
+    return bool
+    """
+    # if there are no human players return False
+    if not self._human_players:
+      return False
+    # check if human player. If human players is 2. First 2 players is human.
+    return current_player < self._human_players
+
   def auto_play(self):
     """Automated game"""
     current_player = 0
     while not self.is_completed:
-      # roll the dice and play the round for the current player
-      current_player = self.play_round(current_player, dice=self.roll_dice())
+      # check if human_player
+      if self.is_human_player(current_player):
+         raw_input('Player: %s, please press enter to roll the dice.' % (current_player + 1))
+      else: # AI player
+        pass
+
+      # roll the dice and AI play
+      dice = self.roll_dice()
+
+      # play the round for the current player
+      current_player = self.play_round(current_player, dice=dice)
     if self._debug:
       print 'Winner : player %s' % (self._winner + 1)
 
@@ -244,7 +269,7 @@ class Game():
 
     self._players[player]['position'] = position
     # move to next player
-    return (player + 1) % self._num_players
+    return (player + 1) % self.num_players
 
   @property
   def player_positions(self):
@@ -268,7 +293,7 @@ def game_stats(num_games=600):
   # run game 600 times to get statistics. So far I always get higher % winnings for the player1. Good to be the first!
   for i in xrange(num_games):
     # run game with 100 tiles, show 10 tiles in a row, for 10 players
-    board = Game(100, 10, 10)
+    board = Game(n=100, row_size=10, ai_players=10)
     # play the game
     board.auto_play()
 
@@ -285,11 +310,13 @@ def game_stats(num_games=600):
 
 def play_game(num_players=5):
   """Play one game and print the final player locations at the end."""
-  board = Game(n=100, row_size=5, num_players=50, debug=True)
-  # play the game
-  board.auto_play()
+  board = Game(n=100, row_size=5, human_players=1, ai_players=3, debug=True)
+
   # print Rules
   board.display_rules
+
+  # play the game
+  board.auto_play()
   # show the current player locations on the board
   board.show_board()
   print
